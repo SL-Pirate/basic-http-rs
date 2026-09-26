@@ -64,7 +64,7 @@ async fn handle_response(path_opt: Option<String>, mut socket: TcpStream, base_p
 
     if let Some(path) = path_opt {
         if path.contains("..") {
-            if let Err(e) = socket.write(&*bad_request_response).await {
+            if let Err(e) = socket.write_all(&*bad_request_response).await {
                 eprintln!("{e}")
             }
         };
@@ -79,12 +79,15 @@ async fn handle_response(path_opt: Option<String>, mut socket: TcpStream, base_p
             serve_file(&mut socket, format!("{base_path}/index.html"), file).await;
         } else {
             let res = HttpResponse::new(404, "Not Found".to_string(), HashMap::new(), None);
-            if let Err(e) = socket.write(&*HttpParser::new().parse_response(res)).await {
+            if let Err(e) = socket
+                .write_all(&*HttpParser::new().parse_response(res))
+                .await
+            {
                 eprintln!("{e}")
             }
         }
     } else {
-        if let Err(e) = socket.write(&*bad_request_response).await {
+        if let Err(e) = socket.write_all(&*bad_request_response).await {
             eprintln!("{e}")
         }
     }
@@ -108,7 +111,10 @@ async fn serve_file(socket: &mut TcpStream, file_path: String, file: Vec<u8>) {
         ),
     );
     let res = HttpResponse::ok(headers, Some(file));
-    if let Err(e) = socket.write(&*HttpParser::new().parse_response(res)).await {
+    if let Err(e) = socket
+        .write_all(&*HttpParser::new().parse_response(res))
+        .await
+    {
         eprintln!("{e}")
     }
 }
