@@ -19,6 +19,8 @@ Not a big deal. Don't use it for anything serious.
 - `/` serves `index.html`.
 - Any path that doesn't exist falls back to `index.html`, so single page apps
   with client-side routing work. If there is no `index.html` either, it returns 404.
+- Rejects any path containing `..` with a 400.
+- Each connection is handled in its own tokio task.
 
 ## Usage
 
@@ -56,7 +58,6 @@ The container listens on port 80 and serves whatever is mounted at `/srv`.
 
 - HTTP/1.1 only, no HTTPS.
 - No compression, no caching headers, no directory listing.
-- Requests are handled one at a time.
 - The whole file is read into memory before it is sent.
 
 These are fine for serving a small site on a local network, which is all this
