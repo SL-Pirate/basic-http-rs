@@ -67,6 +67,7 @@ async fn handle_response(path_opt: Option<String>, mut socket: TcpStream, base_p
             if let Err(e) = socket.write_all(&*bad_request_response).await {
                 eprintln!("{e}")
             }
+            return;
         };
 
         let file_path = match path.as_str() {
