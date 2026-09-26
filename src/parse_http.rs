@@ -10,14 +10,14 @@ pub struct HttpResponse {
     status_code: u16,
     status: String,
     headers: HashMap<String, String>,
-    body: Option<String>,
+    body: Option<Vec<u8>>,
 }
 
 const CONTENT_LENGTH_HEADER: &str = "Content-Length";
 const CONNECTION_HEADER: &str = "Connection";
 
 impl HttpResponse {
-    pub fn ok(headers: HashMap<String, String>, body: Option<String>) -> HttpResponse {
+    pub fn ok(headers: HashMap<String, String>, body: Option<Vec<u8>>) -> HttpResponse {
         HttpResponse {
             status: "OK".to_string(),
             status_code: 200,
@@ -30,7 +30,7 @@ impl HttpResponse {
         status_code: u16,
         status: String,
         headers: HashMap<String, String>,
-        body: Option<String>,
+        body: Option<Vec<u8>>,
     ) -> HttpResponse {
         HttpResponse {
             status_code,
@@ -42,7 +42,7 @@ impl HttpResponse {
 
     fn get_content_len(&self) -> usize {
         if let Some(body) = self.body.clone() {
-            return body.into_bytes().len();
+            return body.len();
         }
 
         0
@@ -77,11 +77,12 @@ impl HttpParser {
             res.push_str(format!("{CONNECTION_HEADER}: close\r\n").as_str())
         }
         res.push_str("\r\n");
-        if let Some(body) = http_response.body {
-            res.push_str(body.as_str());
+        let mut res_raw = res.into_bytes();
+        if let Some(mut body) = http_response.body {
+            res_raw.append(body.as_mut())
         }
 
-        res.into_bytes()
+        res_raw
     }
 }
 

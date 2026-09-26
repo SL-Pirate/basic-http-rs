@@ -67,8 +67,7 @@ async fn handle_response(path_opt: Option<String>, mut socket: TcpStream, base_p
             "/" => format!("{base_path}/index.html"),
             _ => format!("{base_path}{path}"),
         };
-        println!("looking for file: {file_path}");
-        if let Ok(file) = fs::read_to_string(&file_path) {
+        if let Ok(file) = fs::read(&file_path) {
             let mut headers: HashMap<String, String> = HashMap::new();
             let mime_guess = mime_guess::from_path(file_path);
             headers.insert(
