@@ -4,6 +4,7 @@ pub mod parse_http;
 use crate::cli::CliArgs;
 use crate::parse_http::{HttpParser, HttpResponse};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::{fs, io};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -11,7 +12,7 @@ use tokio::net::{TcpListener, TcpStream};
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let argh: CliArgs = argh::from_env();
-    let base_path: String = argh.get_path();
+    let base_path = Arc::new(argh.get_path());
     let addr = argh.address;
     let port = argh.port;
 
@@ -20,13 +21,16 @@ async fn main() -> io::Result<()> {
     println!("Server listening on {addr}:{port}");
 
     loop {
-        let (socket, _) = listener.accept().await?;
-        let (path, socket) = get_path_from_req(socket).await;
-        handle_response(path, socket, &base_path).await
+        let (mut socket, _) = listener.accept().await?;
+        let base_path = Arc::clone(&base_path);
+        tokio::spawn(async move {
+            let path = get_path_from_req(&mut socket).await;
+            handle_response(path, socket, base_path.as_ref()).await
+        });
     }
 }
 
-async fn get_path_from_req(mut stream: TcpStream) -> (Option<String>, TcpStream) {
+async fn get_path_from_req(stream: &mut TcpStream) -> Option<String> {
     let mut req_raw: Vec<u8> = Vec::new();
 
     loop {
@@ -51,7 +55,7 @@ async fn get_path_from_req(mut stream: TcpStream) -> (Option<String>, TcpStream)
         }
     }
 
-    (HttpParser::new().get_path(req_raw), stream)
+    HttpParser::new().get_path(req_raw)
 }
 
 async fn handle_response(path_opt: Option<String>, mut socket: TcpStream, base_path: &String) {
