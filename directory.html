@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{title}}</title>
+    <style>
+        :root {
+            --bg: #eef1f5;
+            --panel: #ffffff;
+            --ink: #1c2430;
+            --muted: #6b7686;
+            --line: #dde2ea;
+            --hover: #f3f6fa;
+            --accent: #2f5d8a;
+            --folder: #d4a23c;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #151a21;
+                --panel: #1d242d;
+                --ink: #e3e8ef;
+                --muted: #8b96a5;
+                --line: #2c3540;
+                --hover: #242d38;
+                --accent: #7fb0e0;
+                --folder: #e0b457;
+            }
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--ink);
+            font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            padding: 48px 16px;
+        }
+
+        .browser {
+            max-width: 760px;
+            margin: 0 auto;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 17px;
+            font-weight: 600;
+            overflow-wrap: anywhere;
+        }
+
+        .back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            color: var(--ink);
+            text-decoration: none;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+        .back:hover { background: var(--hover); }
+
+        ul.listing {
+            list-style: none;
+            margin: 0;
+            padding: 6px 0;
+        }
+
+        ul.listing li a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 20px;
+            color: var(--ink);
+            text-decoration: none;
+            overflow-wrap: anywhere;
+        }
+        ul.listing li a:hover { background: var(--hover); color: var(--accent); }
+
+        ul.listing li a::before {
+            content: "";
+            flex: none;
+            width: 20px;
+            height: 20px;
+            background-color: var(--muted);
+            -webkit-mask: var(--icon) center / contain no-repeat;
+            mask: var(--icon) center / contain no-repeat;
+        }
+
+        /* folder icon */
+        ul.listing li.dir a::before {
+            background-color: var(--folder);
+            --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/%3E%3C/svg%3E");
+        }
+        ul.listing li.dir a { font-weight: 500; }
+
+        /* file icon */
+        ul.listing li.file a::before {
+            --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V9h5.5z'/%3E%3C/svg%3E");
+        }
+
+        ul.listing:empty::after {
+            content: "This folder is empty.";
+            display: block;
+            padding: 24px 20px;
+            color: var(--muted);
+        }
+
+        a:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: -2px;
+        }
+    </style>
+</head>
+<body>
+<main class="browser">
+    <header>
+        <!-- back button if not in root. If in root will be replaced with nothing -->
+        {{back}}
+        <h1>{{title}}</h1>
+    </header>
+    <!-- will be replaced by individual directory html fragments -->
+    <ul class="listing">{{dirs}}</ul>
+</main>
+</body>
+</html>

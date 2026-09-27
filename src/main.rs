@@ -1,7 +1,9 @@
 pub mod cli;
+pub mod directory;
 pub mod parse_http;
 
 use crate::cli::CliArgs;
+use crate::directory::render_directory_template;
 use crate::parse_http::{HttpParser, HttpResponse};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -59,12 +61,7 @@ async fn get_path_from_req(stream: &mut TcpStream) -> Option<String> {
 }
 
 async fn handle_response(path_opt: Option<String>, mut socket: TcpStream, base_path: &String) {
-    let bad_request_response = HttpParser::new().parse_response(HttpResponse::new(
-        400,
-        "Bad Request".to_string(),
-        HashMap::new(),
-        None,
-    ));
+    let bad_request_response = HttpParser::new().parse_response(HttpResponse::bad_request(None));
 
     if let Some(path) = path_opt {
         if path.contains("..") {
@@ -83,19 +80,37 @@ async fn handle_response(path_opt: Option<String>, mut socket: TcpStream, base_p
         } else if let Ok(file) = fs::read(format!("{base_path}/index.html")) {
             serve_file(&mut socket, format!("{base_path}/index.html"), file).await;
         } else {
-            let res = HttpResponse::new(404, "Not Found".to_string(), HashMap::new(), None);
-            if let Err(e) = socket
-                .write_all(&*HttpParser::new().parse_response(res))
-                .await
-            {
-                eprintln!("{e}")
+            let template_res = render_directory_template(file_path.as_str()).await;
+            let mut headers: HashMap<String, String> = HashMap::new();
+            headers.insert(
+                "Content-Type".to_string(),
+                "text/html; charset=utf-8".to_string(),
+            );
+
+            match template_res {
+                Ok(template) => {
+                    let res = HttpResponse::ok(headers, Some(template.into_bytes()));
+                    if let Err(e) = socket
+                        .write_all(&*HttpParser::new().parse_response(res))
+                        .await
+                    {
+                        eprintln!("{e}")
+                    }
+                    return;
+                }
+                Err(e) => {
+                    eprintln!("{e}");
+                    let res = HttpResponse::not_found(Some(format!("{e}")));
+                    if let Err(e) = socket
+                        .write_all(&*HttpParser::new().parse_response(res))
+                        .await
+                    {
+                        eprintln!("{e}")
+                    }
+                }
             }
         }
-    } else {
-        if let Err(e) = socket.write_all(&*bad_request_response).await {
-            eprintln!("{e}")
-        }
-    }
+    };
 }
 
 async fn serve_file(socket: &mut TcpStream, file_path: String, file: Vec<u8>) {

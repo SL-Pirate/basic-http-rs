@@ -8,6 +8,7 @@ RUN apk add --no-cache musl-dev
 
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
+COPY directory.html ./
 COPY src ./src
 
 # cache mounts keep the registry and build artifacts between builds;

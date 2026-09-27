@@ -40,6 +40,24 @@ impl HttpResponse {
         }
     }
 
+    pub fn bad_request(body: Option<String>) -> HttpResponse {
+        HttpResponse::new(
+            400,
+            "Bad Request".to_string(),
+            HashMap::new(),
+            body.map(|item| item.into_bytes()),
+        )
+    }
+
+    pub fn not_found(body: Option<String>) -> HttpResponse {
+        HttpResponse::new(
+            404,
+            "Not Found".to_string(),
+            HashMap::new(),
+            body.map(|item| item.into_bytes()),
+        )
+    }
+
     fn get_content_len(&self) -> usize {
         if let Some(body) = self.body.clone() {
             return body.len();

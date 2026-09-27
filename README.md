@@ -16,11 +16,18 @@ Not a big deal. Don't use it for anything serious.
 
 - Serves files from a directory over plain HTTP.
 - Guesses `Content-Type` from the file extension.
-- `/` serves `index.html`.
-- Any path that doesn't exist falls back to `index.html`, so single page apps
-  with client-side routing work. If there is no `index.html` either, it returns 404.
 - Rejects any path containing `..` with a 400.
 - Each connection is handled in its own tokio task.
+
+What you get for a path depends on whether the served directory has an `index.html`:
+
+- **With `index.html`** (a website or single page app): `/` serves it, and any
+  path that doesn't exist also falls back to it, so client-side routing works.
+- **Without `index.html`** (a plain folder of files): you get a directory browser
+  instead. `/` and any subfolder show a list of folders and files with a back link.
+
+The browser page is rendered from `directory.html`, which is embedded into the
+binary at compile time. So the Docker image is still just one file.
 
 ## Usage
 
@@ -57,7 +64,7 @@ The container listens on port 80 and serves whatever is mounted at `/srv`.
 ## Limitations
 
 - HTTP/1.1 only, no HTTPS.
-- No compression, no caching headers, no directory listing.
+- No compression, no caching headers.
 - The whole file is read into memory before it is sent.
 
 These are fine for serving a small site on a local network, which is all this
