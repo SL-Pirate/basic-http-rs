@@ -9,6 +9,7 @@ pub struct HttpServer {
     listener: TcpListener
 }
 
+#[derive(Debug)]
 pub struct ServerHandler {
     stream: TcpStream,
     base_path: String,

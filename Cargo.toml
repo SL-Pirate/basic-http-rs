@@ -5,13 +5,12 @@ edition = "2024"
 
 [dependencies]
 argh = "0.1.19"
-http_parser = "0.0.2"
 mime_guess = "2.0.5"
 tokio = { version = "1.53.1", features = ["full"] }
 
 # size over speed: the whole point of the image is to be tiny
 [profile.release]
-opt-level = "z"
+opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"

@@ -1,11 +1,11 @@
-use crate::parse_http::{HttpParser, HttpResponse};
+use crate::http_parser::{CONTENT_TYPE, HttpRequest, HttpResponse};
 use crate::server::ServerHandler;
-use std::collections::HashMap;
 use std::{fs, io};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 const DIRECTORY_HTML: &str = include_str!("../../directory.html");
+const BUFFER_SIZE: usize = 128;
 
 impl ServerHandler {
     pub fn new(stream: TcpStream, base_path: String) -> ServerHandler {
@@ -16,15 +16,13 @@ impl ServerHandler {
         let mut req_raw: Vec<u8> = Vec::new();
 
         loop {
-            const BUFFER_SIZE: usize = 128;
             let mut buffer = [0u8; BUFFER_SIZE];
             match self.stream.read(&mut buffer).await {
                 Ok(read) => {
-                    if read == 0 {
+                    if read <= 0 {
                         break;
-                    } else if read < 128 {
+                    } else if read < BUFFER_SIZE {
                         req_raw.append(&mut buffer[..read].to_vec());
-                        buffer.fill(0);
                         break;
                     } else {
                         req_raw.append(&mut buffer.to_vec());
@@ -32,21 +30,23 @@ impl ServerHandler {
                     }
                 }
                 Err(e) => {
-                    println!("error while reading the request: {e}");
+                    eprintln!("error while reading the request: {e}");
+                    break;
                 }
             }
         }
 
-        HttpParser::new().get_path(req_raw)
+        HttpRequest::from_vec(req_raw).ok().map(|req| req.path())
     }
 
     pub(crate) async fn handle_response(&mut self, path_opt: Option<String>) {
-        let bad_request_response =
-            HttpParser::new().parse_response(HttpResponse::bad_request(None));
-
         if let Some(path) = path_opt {
             if path.contains("..") {
-                if let Err(e) = self.stream.write_all(&*bad_request_response).await {
+                if let Err(e) = self
+                    .stream
+                    .write_all(&HttpResponse::bad_request(None).to_bytes())
+                    .await
+                {
                     eprintln!("{e}")
                 }
                 return;
@@ -63,47 +63,33 @@ impl ServerHandler {
                     .await;
             } else {
                 let template_res = self.render_directory_template(file_path.as_str()).await;
-                let mut headers: HashMap<String, String> = HashMap::new();
-                headers.insert(
-                    "Content-Type".to_string(),
-                    "text/html; charset=utf-8".to_string(),
-                );
 
                 match template_res {
                     Ok(template) => {
                         // if path doesn't end in a /, we redirect
                         if !path.ends_with('/') {
-                            let mut headers = HashMap::new();
-                            headers.insert("Location".to_string(), format!("{path}/"));
-                            let res = HttpResponse::new(302, "Found".to_string(), headers, None);
-                            if let Err(e) = self
-                                .stream
-                                .write_all(&*HttpParser::new().parse_response(res))
-                                .await
-                            {
+                            let res =
+                                HttpResponse::redirect(format!("{path}/").as_str()).to_bytes();
+                            if let Err(e) = self.stream.write_all(&res).await {
                                 eprintln!("{e}")
                             }
                             return;
                         }
 
-                        let res = HttpResponse::ok(headers, Some(template.into_bytes()));
-                        if let Err(e) = self
-                            .stream
-                            .write_all(&*HttpParser::new().parse_response(res))
-                            .await
-                        {
+                        let res = HttpResponse::builder()
+                            .body_from_string(template)
+                            .add_header(CONTENT_TYPE, "text/html; charset=utf-8")
+                            .build()
+                            .to_bytes();
+                        if let Err(e) = self.stream.write_all(&res).await {
                             eprintln!("{e}")
                         }
                         return;
                     }
                     Err(e) => {
                         eprintln!("File not found!: {e}");
-                        let res = HttpResponse::not_found(Some(format!("{e}")));
-                        if let Err(e) = self
-                            .stream
-                            .write_all(&*HttpParser::new().parse_response(res))
-                            .await
-                        {
+                        let res = HttpResponse::not_found(Some(format!("{e}"))).to_bytes();
+                        if let Err(e) = self.stream.write_all(&res).await {
                             eprintln!("{e}")
                         }
                     }
@@ -113,28 +99,27 @@ impl ServerHandler {
     }
 
     async fn serve_file(&mut self, file_path: String, file: Vec<u8>) {
-        let mut headers: HashMap<String, String> = HashMap::new();
         let mime_guess = mime_guess::from_path(file_path);
-        headers.insert(
-            "Content-Type".to_string(),
-            format!(
-                "{}; charset=utf-8",
-                match mime_guess.first() {
-                    None => {
-                        "text/html".to_string()
+        let res = HttpResponse::builder()
+            .body(file)
+            .add_header(
+                "Content-Type",
+                format!(
+                    "{}; charset=utf-8",
+                    match mime_guess.first() {
+                        None => {
+                            "text/html".to_string()
+                        }
+                        Some(mime) => {
+                            mime.to_string()
+                        }
                     }
-                    Some(mime) => {
-                        mime.to_string()
-                    }
-                }
-            ),
-        );
-        let res = HttpResponse::ok(headers, Some(file));
-        if let Err(e) = self
-            .stream
-            .write_all(&*HttpParser::new().parse_response(res))
-            .await
-        {
+                )
+                .as_str(),
+            )
+            .build()
+            .to_bytes();
+        if let Err(e) = self.stream.write_all(&res).await {
             eprintln!("{e}")
         }
     }
@@ -152,18 +137,21 @@ impl ServerHandler {
         };
 
         // replacing title
-        template = template.replace("{{title}}", dir.as_str());
+        template = template.replace(
+            "{{title}}",
+            dir.replace(self.base_path.as_str(), "").as_str(),
+        );
 
         // handling listing
-        let mut directories = tokio::fs::read_dir(&dir).await?;
+        let mut items = tokio::fs::read_dir(&dir).await?;
         let mut dirs: Vec<String> = Vec::new();
         let mut files: Vec<String> = Vec::new();
+
         loop {
-            if let Some(item) = directories.next_entry().await? {
+            if let Some(item) = items.next_entry().await? {
                 let file_type = item.file_type().await?;
                 if file_type.is_dir() {
-                    if let Ok(mut path) = item.path().into_string() {
-                        path.remove(0);
+                    if let Ok(path) = item.path().into_string() {
                         dirs.push(path);
                     }
                 } else if file_type.is_file() {
@@ -179,14 +167,11 @@ impl ServerHandler {
         let mut item_list = String::new();
         for mut item in dirs {
             item = item.replace(&dir, "");
-            let mut item_name = item.clone();
-            item_name.insert(0, '.');
-            item_name = item_name.replace(&dir, "");
-            if item_name.starts_with("/") {
-                item_name.remove(0);
+            if item.starts_with("/") {
+                item.remove(0);
             }
             item_list.push_str(&format!(
-                "<li class='dir'><a href='{item}/'>{item_name}</a></li>\n",
+                "<li class='dir'><a href='{item}/'>{item}</a></li>\n",
             ));
         }
         for mut item in files {

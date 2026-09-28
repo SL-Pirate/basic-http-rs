@@ -1,5 +1,5 @@
 pub mod cli;
-pub mod parse_http;
+pub mod http_parser;
 pub mod server;
 
 use crate::server::HttpServer;

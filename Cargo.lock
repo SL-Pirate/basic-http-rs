@@ -38,7 +38,6 @@ name = "basic-http-rs"
 version = "0.1.0"
 dependencies = [
  "argh",
- "http_parser",
  "mime_guess",
  "tokio",
 ]
@@ -70,12 +69,6 @@ dependencies = [
  "libc",
  "windows-sys",
 ]
-
-[[package]]
-name = "http_parser"
-version = "0.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51920dcf9ba510c41992f2095e8a2fc7f1c34f3613c83d1c4432c32145baf3a5"
 
 [[package]]
 name = "libc"
