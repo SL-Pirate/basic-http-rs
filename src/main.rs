@@ -1,6 +1,9 @@
+extern crate core;
+
 pub mod cli;
 pub mod http_parser;
 pub mod server;
+pub mod compression;
 
 use crate::server::HttpServer;
 use std::io;

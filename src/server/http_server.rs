@@ -1,5 +1,6 @@
 use crate::cli::CliArgs;
-use crate::server::{HttpServer, ServerHandler};
+use crate::compression::Compression;
+use crate::server::{HttpServer, RequestHandler};
 use std::io;
 use std::process::exit;
 use std::sync::Arc;
@@ -8,8 +9,8 @@ use tokio::net::TcpListener;
 impl HttpServer {
     pub async fn new() -> HttpServer {
         let args: CliArgs = argh::from_env();
-        let addr = args.address.clone();
-        let port = args.port.clone();
+        let addr = args.address().clone();
+        let port = args.port().clone();
         HttpServer {
             args,
             listener: Self::create_listener(addr, port).await,
@@ -18,15 +19,23 @@ impl HttpServer {
 
     pub async fn serve(self) -> io::Result<()> {
         let arc = Arc::new(self);
+        let compressor_acr = Arc::new(Compression::new());
 
         loop {
-            let server_arc = Arc::clone(&arc);
+            let server_arc = arc.clone();
+            let compressor_arc = compressor_acr.clone();
             let (stream, _) = server_arc.listener.accept().await?;
             tokio::spawn(async move {
                 let server = server_arc.as_ref();
-                let mut handler = ServerHandler::new(stream, server.args.get_path());
-                let path = handler.get_path_from_req().await;
-                handler.handle_response(path).await
+
+                let mut handler = RequestHandler::new(
+                    stream,
+                    server.args.get_path(),
+                    server.args.is_compression_enabled(),
+                    compressor_arc,
+                );
+                let req = handler.get_request().await;
+                handler.handle_response(req).await
             });
         }
     }

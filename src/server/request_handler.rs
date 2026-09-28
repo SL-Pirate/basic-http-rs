@@ -1,5 +1,7 @@
+use crate::compression::Compression;
 use crate::http_parser::{CONTENT_TYPE, HttpRequest, HttpResponse};
-use crate::server::ServerHandler;
+use crate::server::RequestHandler;
+use std::sync::Arc;
 use std::{fs, io};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -7,12 +9,22 @@ use tokio::net::TcpStream;
 const DIRECTORY_HTML: &str = include_str!("../../directory.html");
 const BUFFER_SIZE: usize = 128;
 
-impl ServerHandler {
-    pub fn new(stream: TcpStream, base_path: String) -> ServerHandler {
-        ServerHandler { stream, base_path }
+impl RequestHandler {
+    pub fn new(
+        stream: TcpStream,
+        base_path: String,
+        enable_compression: bool,
+        compressor: Arc<Compression>,
+    ) -> RequestHandler {
+        RequestHandler {
+            stream,
+            base_path,
+            enable_compression,
+            compressor,
+        }
     }
 
-    pub(crate) async fn get_path_from_req(&mut self) -> Option<String> {
+    pub(crate) async fn get_request(&mut self) -> Option<HttpRequest> {
         let mut req_raw: Vec<u8> = Vec::new();
 
         loop {
@@ -36,19 +48,14 @@ impl ServerHandler {
             }
         }
 
-        HttpRequest::from_vec(req_raw).ok().map(|req| req.path())
+        HttpRequest::from_vec(req_raw).ok()
     }
 
-    pub(crate) async fn handle_response(&mut self, path_opt: Option<String>) {
-        if let Some(path) = path_opt {
+    pub(crate) async fn handle_response(&mut self, req_opt: Option<HttpRequest>) {
+        if let Some(req) = req_opt {
+            let path = req.path();
             if path.contains("..") {
-                if let Err(e) = self
-                    .stream
-                    .write_all(&HttpResponse::bad_request(None).to_bytes())
-                    .await
-                {
-                    eprintln!("{e}")
-                }
+                self.send(&req, &mut HttpResponse::bad_request(None)).await;
                 return;
             };
 
@@ -57,9 +64,9 @@ impl ServerHandler {
                 _ => format!("{}{path}", self.base_path),
             };
             if let Ok(file) = fs::read(&file_path) {
-                self.serve_file(file_path, file).await;
+                self.serve_file(&req, file_path, file).await;
             } else if let Ok(file) = fs::read(format!("{}/index.html", self.base_path)) {
-                self.serve_file(format!("{}/index.html", self.base_path), file)
+                self.serve_file(&req, format!("{}/index.html", self.base_path), file)
                     .await;
             } else {
                 let template_res = self.render_directory_template(file_path.as_str()).await;
@@ -68,60 +75,58 @@ impl ServerHandler {
                     Ok(template) => {
                         // if path doesn't end in a /, we redirect
                         if !path.ends_with('/') {
-                            let res =
-                                HttpResponse::redirect(format!("{path}/").as_str()).to_bytes();
-                            if let Err(e) = self.stream.write_all(&res).await {
-                                eprintln!("{e}")
-                            }
+                            self.send(
+                                &req,
+                                &mut HttpResponse::redirect(format!("{path}/").as_str()),
+                            )
+                            .await;
                             return;
                         }
 
-                        let res = HttpResponse::builder()
-                            .body_from_string(template)
-                            .add_header(CONTENT_TYPE, "text/html; charset=utf-8")
-                            .build()
-                            .to_bytes();
-                        if let Err(e) = self.stream.write_all(&res).await {
-                            eprintln!("{e}")
-                        }
+                        self.send(
+                            &req,
+                            &mut HttpResponse::builder()
+                                .body_from_string(template)
+                                .add_header(CONTENT_TYPE, "text/html; charset=utf-8")
+                                .build(),
+                        )
+                        .await;
                         return;
                     }
                     Err(e) => {
                         eprintln!("File not found!: {e}");
-                        let res = HttpResponse::not_found(Some(format!("{e}"))).to_bytes();
-                        if let Err(e) = self.stream.write_all(&res).await {
-                            eprintln!("{e}")
-                        }
+                        self.send(&req, &mut HttpResponse::not_found(Some(format!("{e}"))))
+                            .await;
                     }
                 }
             }
         };
     }
 
-    async fn serve_file(&mut self, file_path: String, file: Vec<u8>) {
+    async fn serve_file(&mut self, req: &HttpRequest, file_path: String, file: Vec<u8>) {
         let mime_guess = mime_guess::from_path(file_path);
-        let res = HttpResponse::builder()
-            .body(file)
-            .add_header(
-                "Content-Type",
-                format!(
-                    "{}; charset=utf-8",
-                    match mime_guess.first() {
-                        None => {
-                            "text/html".to_string()
+        self.send(
+            &req,
+            &mut HttpResponse::builder()
+                .body(file)
+                .add_header(
+                    "Content-Type",
+                    format!(
+                        "{}; charset=utf-8",
+                        match mime_guess.first() {
+                            None => {
+                                "text/html".to_string()
+                            }
+                            Some(mime) => {
+                                mime.to_string()
+                            }
                         }
-                        Some(mime) => {
-                            mime.to_string()
-                        }
-                    }
+                    )
+                    .as_str(),
                 )
-                .as_str(),
-            )
-            .build()
-            .to_bytes();
-        if let Err(e) = self.stream.write_all(&res).await {
-            eprintln!("{e}")
-        }
+                .build(),
+        )
+        .await;
     }
 
     async fn render_directory_template(&self, pre_processed_dir: &str) -> io::Result<String> {
@@ -187,5 +192,54 @@ impl ServerHandler {
         template = template.replace("{{dirs}}", item_list.as_str());
 
         Ok(template)
+    }
+
+    async fn send(&mut self, req: &HttpRequest, res: &mut HttpResponse) {
+        if self.should_compress(req, res) {
+            res.apply_compression(req.get_acceptable_encodings(), |payload, accepted| {
+                self.compressor.compress(payload, accepted)
+            });
+        }
+
+        if let Err(e) = self.stream.write_all(&res.to_bytes()).await {
+            eprintln!("{e}")
+        }
+    }
+
+    fn should_compress(&self, req: &HttpRequest, res: &HttpResponse) -> bool {
+        if !self.enable_compression {
+            return false;
+        }
+        if res.get_content_length() <= 1024 {
+            return false;
+        };
+        if !Compression::can_encode(req.get_acceptable_encodings()) {
+            return false;
+        }
+        match res.get_headers().get(CONTENT_TYPE) {
+            None => false,
+            Some(content_type) => {
+                let mime = content_type
+                    .split(';')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .to_ascii_lowercase();
+
+                let can_encode = mime.starts_with("text/")
+                    || mime.ends_with("+json")   // application/ld+json, application/problem+json
+                    || mime.ends_with("+xml")    // image/svg+xml, application/atom+xml
+                    || matches!(
+                mime.as_str(),
+                "application/json"
+                    | "application/javascript"
+                    | "application/xml"
+                    | "application/wasm"
+                    | "font/ttf"
+                    | "font/otf"
+                );
+                can_encode
+            }
+        }
     }
 }

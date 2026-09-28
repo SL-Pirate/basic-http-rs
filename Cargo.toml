@@ -1,14 +1,15 @@
 [package]
 name = "basic-http-rs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
 argh = "0.1.19"
+brotli = "9.0.0"
+flate2 = "1.1.10"
 mime_guess = "2.0.5"
 tokio = { version = "1.53.1", features = ["full"] }
 
-# size over speed: the whole point of the image is to be tiny
 [profile.release]
 opt-level = 3
 lto = true

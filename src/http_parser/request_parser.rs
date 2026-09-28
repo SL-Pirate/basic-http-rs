@@ -1,4 +1,4 @@
-use crate::http_parser::{HttpMethod, HttpRequest};
+use crate::http_parser::{ACCEPT_ENCODING, HttpMethod, HttpRequest};
 use std::collections::HashMap;
 
 impl HttpRequest {
@@ -68,6 +68,24 @@ impl HttpRequest {
 
     pub fn headers(&self) -> HashMap<String, String> {
         self.headers.clone()
+    }
+
+    pub fn get_acceptable_encodings(&self) -> Vec<&str> {
+        if let Some(accepted_encodings) = self.headers.get(ACCEPT_ENCODING) {
+            let mut encodings: Vec<&str> = Vec::new();
+            let mut split = accepted_encodings.split(",");
+            loop {
+                match split.next() {
+                    None => {
+                        break;
+                    }
+                    Some(enc) => encodings.push(enc.trim()),
+                }
+            }
+            return encodings;
+        }
+
+        vec![]
     }
 
     pub fn body(&self) -> Option<String> {

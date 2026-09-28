@@ -29,4 +29,4 @@ WORKDIR /srv
 EXPOSE 80
 
 # serve path defaults to ".", so mount the site at /srv
-ENTRYPOINT ["/basic-http-rs", "-p", "80"]
+ENTRYPOINT ["/basic-http-rs", "-p", "80", "--enable-compression"]

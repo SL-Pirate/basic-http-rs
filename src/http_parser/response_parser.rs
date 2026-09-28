@@ -1,6 +1,6 @@
 use crate::http_parser::{
-    BAD_REQUEST, CONNECTION_HEADER, CONTENT_LENGTH_HEADER, FOUND, HttpResponse, HttpResponseCode,
-    INTERNAL_SERVER_ERROR, LOCATION, NOT_FOUND, OK,
+    BAD_REQUEST, CONNECTION_HEADER, CONTENT_ENCODING, CONTENT_LENGTH_HEADER, FOUND, HttpResponse,
+    HttpResponseCode, INTERNAL_SERVER_ERROR, LOCATION, NOT_FOUND, OK,
 };
 use std::collections::HashMap;
 
@@ -45,6 +45,28 @@ impl HttpResponse {
         }
 
         res_raw
+    }
+
+    pub fn get_content_length(&self) -> usize {
+        self.body.clone().map_or(0, |b| b.len())
+    }
+
+    pub fn get_headers(&self) -> HashMap<String, String> {
+        self.headers.clone()
+    }
+
+    pub fn apply_compression<F>(&mut self, accepted_encodings: Vec<&str>, compressor: F)
+    where
+        F: Fn(Vec<u8>, Vec<&str>) -> (Option<String>, Vec<u8>),
+    {
+        if let Some(b) = self.body.clone() {
+            let (opt_encoding, body) = compressor(b, accepted_encodings);
+            if let Some(encoding) = opt_encoding {
+                self.body = Some(body);
+                self.headers
+                    .insert(String::from(CONTENT_ENCODING), String::from(encoding));
+            }
+        }
     }
 
     fn encode(&self) -> String {

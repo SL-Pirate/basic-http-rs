@@ -37,6 +37,8 @@ pub const CONTENT_TYPE: &str = "Content-Type";
 pub const CONTENT_LENGTH_HEADER: &str = "Content-Length";
 pub const CONNECTION_HEADER: &str = "Connection";
 pub const LOCATION: &str = "Location";
+pub const ACCEPT_ENCODING: &str = "Accept-Encoding";
+pub const CONTENT_ENCODING: &str = "Content-Encoding";
 
 pub type HttpResponseCode = (u16, &'static str);
 
