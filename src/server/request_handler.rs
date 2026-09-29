@@ -1,9 +1,10 @@
 use crate::compression::Compression;
 use crate::http_parser::{CONTENT_TYPE, HttpRequest, HttpResponse};
 use crate::server::RequestHandler;
+use crate::server::response_handler::GenericHttpResponse;
 use std::sync::Arc;
 use std::{fs, io};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 
 const DIRECTORY_HTML: &str = include_str!("../../directory.html");
@@ -86,7 +87,7 @@ impl RequestHandler {
                         self.send(
                             &req,
                             &mut HttpResponse::builder()
-                                .body_from_string(template)
+                                .body(template.into_bytes())
                                 .add_header(CONTENT_TYPE, "text/html; charset=utf-8")
                                 .build(),
                         )
@@ -194,19 +195,21 @@ impl RequestHandler {
         Ok(template)
     }
 
-    async fn send(&mut self, req: &HttpRequest, res: &mut HttpResponse) {
-        if self.should_compress(req, res) {
-            res.apply_compression(req.get_acceptable_encodings(), |payload, accepted| {
-                self.compressor.compress(payload, accepted)
-            });
-        }
-
-        if let Err(e) = self.stream.write_all(&res.to_bytes()).await {
-            eprintln!("{e}")
-        }
+    async fn send<T: Clone>(&mut self, req: &HttpRequest, res: &mut dyn GenericHttpResponse<T>) {
+        res.send(
+            self.should_compress(req, res),
+            req.get_acceptable_encodings(),
+            self.compressor.clone(),
+            &mut self.stream,
+        )
+        .await;
     }
 
-    fn should_compress(&self, req: &HttpRequest, res: &HttpResponse) -> bool {
+    fn should_compress<T: Clone>(
+        &self,
+        req: &HttpRequest,
+        res: &dyn GenericHttpResponse<T>,
+    ) -> bool {
         if !self.enable_compression {
             return false;
         }
@@ -216,7 +219,7 @@ impl RequestHandler {
         if !Compression::can_encode(req.get_acceptable_encodings()) {
             return false;
         }
-        match res.get_headers().get(CONTENT_TYPE) {
+        match res.this().headers().get(CONTENT_TYPE) {
             None => false,
             Some(content_type) => {
                 let mime = content_type

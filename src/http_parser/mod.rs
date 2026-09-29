@@ -11,11 +11,11 @@ pub struct HttpRequest {
     body: Option<String>,
 }
 
-pub struct HttpResponse {
+pub struct HttpResponse<T> {
     status: String,
     status_code: u16,
     headers: HashMap<String, String>,
-    body: Option<Vec<u8>>,
+    body: Option<T>,
 }
 
 #[derive(Clone)]

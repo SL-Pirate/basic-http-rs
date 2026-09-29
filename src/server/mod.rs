@@ -1,5 +1,6 @@
 pub mod http_server;
 mod request_handler;
+pub mod response_handler;
 
 use std::sync::Arc;
 use crate::cli::CliArgs;

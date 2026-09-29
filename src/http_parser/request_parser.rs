@@ -54,20 +54,20 @@ impl HttpRequest {
         Self::from_string(string)
     }
 
-    pub fn path(&self) -> String {
-        self.path.clone()
+    pub fn path(&self) -> &String {
+        &self.path
     }
 
-    pub fn method(&self) -> HttpMethod {
-        self.method.clone()
+    pub fn method(&self) -> &HttpMethod {
+        &self.method
     }
 
-    pub fn standard(&self) -> String {
-        self.standard.clone()
+    pub fn standard(&self) -> &String {
+        &self.standard
     }
 
-    pub fn headers(&self) -> HashMap<String, String> {
-        self.headers.clone()
+    pub fn headers(&self) -> &HashMap<String, String> {
+        &self.headers
     }
 
     pub fn get_acceptable_encodings(&self) -> Vec<&str> {
@@ -88,8 +88,8 @@ impl HttpRequest {
         vec![]
     }
 
-    pub fn body(&self) -> Option<String> {
-        self.body.clone()
+    pub fn body(&self) -> &Option<String> {
+        &self.body
     }
 }
 

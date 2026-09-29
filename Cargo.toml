@@ -1,10 +1,11 @@
 [package]
 name = "basic-http-rs"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 
 [dependencies]
 argh = "0.1.19"
+async-trait = "0.1.92"
 brotli = "9.0.0"
 flate2 = "1.1.10"
 mime_guess = "2.0.5"
