@@ -39,6 +39,7 @@ pub const CONNECTION_HEADER: &str = "Connection";
 pub const LOCATION: &str = "Location";
 pub const ACCEPT_ENCODING: &str = "Accept-Encoding";
 pub const CONTENT_ENCODING: &str = "Content-Encoding";
+pub const TRANSFER_ENCODING: &str = "Transfer-Encoding";
 
 pub type HttpResponseCode = (u16, &'static str);
 

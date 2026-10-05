@@ -4,7 +4,7 @@ use crate::http_parser::{
 };
 use std::collections::HashMap;
 
-impl<T: Clone> HttpResponse<T> {
+impl<T> HttpResponse<T> {
     pub fn builder() -> HttpResponseBuilder<T> {
         HttpResponseBuilder::new()
     }
@@ -21,8 +21,8 @@ impl<T: Clone> HttpResponse<T> {
         &self.headers
     }
 
-    pub fn body(&self) -> &Option<T> {
-        &self.body
+    pub fn body(&mut self) -> &mut Option<T> {
+        &mut self.body
     }
 }
 
@@ -63,7 +63,7 @@ pub struct HttpResponseBuilder<T> {
     body: Option<T>,
 }
 
-impl<T: Clone> HttpResponseBuilder<T> {
+impl<T> HttpResponseBuilder<T> {
     fn new() -> HttpResponseBuilder<T> {
         HttpResponseBuilder {
             body: None,
@@ -73,32 +73,29 @@ impl<T: Clone> HttpResponseBuilder<T> {
         }
     }
 
-    pub fn status(&mut self, status: &str) -> &mut HttpResponseBuilder<T> {
+    pub fn status(mut self, status: &str) -> HttpResponseBuilder<T> {
         self.status = String::from(status);
         self
     }
 
-    pub fn status_and_code(
-        &mut self,
-        (code, status): HttpResponseCode,
-    ) -> &mut HttpResponseBuilder<T> {
+    pub fn status_and_code(mut self, (code, status): HttpResponseCode) -> HttpResponseBuilder<T> {
         self.status = String::from(status);
         self.status_code = code;
         self
     }
 
-    pub fn status_code(&mut self, status_code: u16) -> &mut HttpResponseBuilder<T> {
+    pub fn status_code(mut self, status_code: u16) -> HttpResponseBuilder<T> {
         self.status_code = status_code;
         self
     }
 
-    pub fn add_header(&mut self, key: &str, value: &str) -> &mut HttpResponseBuilder<T> {
+    pub fn add_header(mut self, key: &str, value: &str) -> HttpResponseBuilder<T> {
         self.headers.insert(String::from(key), String::from(value));
 
         self
     }
 
-    pub fn headers(&mut self, headers: HashMap<String, String>) -> &mut HttpResponseBuilder<T> {
+    pub fn headers(mut self, headers: HashMap<String, String>) -> HttpResponseBuilder<T> {
         for (k, v) in headers {
             self.headers.insert(k, v);
         }
@@ -106,16 +103,16 @@ impl<T: Clone> HttpResponseBuilder<T> {
         self
     }
 
-    pub fn body(&mut self, body: T) -> &mut HttpResponseBuilder<T> {
+    pub fn body(mut self, body: T) -> HttpResponseBuilder<T> {
         self.body = Some(body);
         self
     }
 
-    pub fn build(&self) -> HttpResponse<T> {
+    pub fn build(self) -> HttpResponse<T> {
         HttpResponse {
-            body: self.body.clone(),
-            headers: self.headers.clone(),
-            status: self.status.clone(),
+            body: self.body,
+            headers: self.headers,
+            status: self.status,
             status_code: self.status_code,
         }
     }

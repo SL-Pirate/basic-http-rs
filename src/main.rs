@@ -4,6 +4,7 @@ pub mod cli;
 pub mod http_parser;
 pub mod server;
 pub mod compression;
+pub mod async_util;
 
 use crate::server::HttpServer;
 use std::io;

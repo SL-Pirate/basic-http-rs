@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::io;
+use std::sync::{Arc};
+use tokio::io;
+use tokio::io::DuplexStream;
+use tokio::sync::Mutex;
 
 pub mod brotli;
 mod compression;
@@ -14,9 +17,16 @@ pub const AVAILABLE_ALGORITHMS: [&'static str; 2] = [BROTLI_ALGO, GZIP_ALGO];
 
 #[derive(Debug)]
 pub struct Compression {
-    algorithms: HashMap<String, Box<dyn Compress>>,
+    algorithms: HashMap<String, Arc<dyn Compress>>,
 }
 
+#[async_trait::async_trait]
 pub trait Compress: Debug + Send + Sync {
     fn compress(&self, content: &Vec<u8>) -> io::Result<Vec<u8>>;
+
+    async fn compress_stream(
+        &self,
+        input: Arc<DuplexStream>,
+        out: Arc<Mutex<DuplexStream>>,
+    ) -> io::Result<()>;
 }

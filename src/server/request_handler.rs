@@ -1,10 +1,12 @@
+use crate::async_util::to_duplex;
 use crate::compression::Compression;
 use crate::http_parser::{CONTENT_TYPE, HttpRequest, HttpResponse};
 use crate::server::RequestHandler;
 use crate::server::response_handler::GenericHttpResponse;
+use std::io;
 use std::sync::Arc;
-use std::{fs, io};
-use tokio::io::AsyncReadExt;
+use tokio::fs::File;
+use tokio::io::{AsyncReadExt, BufReader};
 use tokio::net::TcpStream;
 
 const DIRECTORY_HTML: &str = include_str!("../../directory.html");
@@ -64,11 +66,15 @@ impl RequestHandler {
                 "/" => format!("{}/index.html", self.base_path),
                 _ => format!("{}{path}", self.base_path),
             };
-            if let Ok(file) = fs::read(&file_path) {
-                self.serve_file(&req, file_path, file).await;
-            } else if let Ok(file) = fs::read(format!("{}/index.html", self.base_path)) {
-                self.serve_file(&req, format!("{}/index.html", self.base_path), file)
-                    .await;
+            if let Ok(file) = File::open(&file_path).await {
+                self.serve_file(&req, file_path, BufReader::new(file)).await;
+            } else if let Ok(file) = File::open(format!("{}/index.html", self.base_path)).await {
+                self.serve_file(
+                    &req,
+                    format!("{}/index.html", self.base_path),
+                    BufReader::new(file),
+                )
+                .await;
             } else {
                 let template_res = self.render_directory_template(file_path.as_str()).await;
 
@@ -104,30 +110,37 @@ impl RequestHandler {
         };
     }
 
-    async fn serve_file(&mut self, req: &HttpRequest, file_path: String, file: Vec<u8>) {
-        let mime_guess = mime_guess::from_path(file_path);
-        self.send(
-            &req,
-            &mut HttpResponse::builder()
-                .body(file)
-                .add_header(
-                    "Content-Type",
-                    format!(
-                        "{}; charset=utf-8",
-                        match mime_guess.first() {
-                            None => {
-                                "text/html".to_string()
-                            }
-                            Some(mime) => {
-                                mime.to_string()
-                            }
-                        }
-                    )
-                    .as_str(),
+    async fn serve_file(&mut self, req: &HttpRequest, file_path: String, file: BufReader<File>) {
+        match to_duplex(file).await {
+            Ok(file_stream) => {
+                let mime_guess = mime_guess::from_path(file_path);
+                self.send(
+                    &req,
+                    &mut HttpResponse::builder()
+                        .body(file_stream)
+                        .add_header(
+                            "Content-Type",
+                            format!(
+                                "{}; charset=utf-8",
+                                match mime_guess.first() {
+                                    None => {
+                                        "text/html".to_string()
+                                    }
+                                    Some(mime) => {
+                                        mime.to_string()
+                                    }
+                                }
+                            )
+                            .as_str(),
+                        )
+                        .build(),
                 )
-                .build(),
-        )
-        .await;
+                .await;
+            }
+            Err(e) => {
+                eprintln!("Error trying to convert file stream to duplex: {e}");
+            }
+        }
     }
 
     async fn render_directory_template(&self, pre_processed_dir: &str) -> io::Result<String> {
@@ -195,9 +208,11 @@ impl RequestHandler {
         Ok(template)
     }
 
-    async fn send<T: Clone>(&mut self, req: &HttpRequest, res: &mut dyn GenericHttpResponse<T>) {
+    async fn send<T>(&mut self, req: &HttpRequest, res: &mut dyn GenericHttpResponse<T>) {
+        println!("write -4");
+        let should_compress = self.should_compress(req, res);
         res.send(
-            self.should_compress(req, res),
+            should_compress,
             req.get_acceptable_encodings(),
             self.compressor.clone(),
             &mut self.stream,
@@ -205,15 +220,13 @@ impl RequestHandler {
         .await;
     }
 
-    fn should_compress<T: Clone>(
-        &self,
-        req: &HttpRequest,
-        res: &dyn GenericHttpResponse<T>,
-    ) -> bool {
+    fn should_compress<T>(&self, req: &HttpRequest, res: &mut dyn GenericHttpResponse<T>) -> bool {
         if !self.enable_compression {
             return false;
         }
-        if res.get_content_length() <= 1024 {
+        if let Some(len) = res.get_content_length()
+            && len <= 1024
+        {
             return false;
         };
         if !Compression::can_encode(req.get_acceptable_encodings()) {

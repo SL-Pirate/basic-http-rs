@@ -1,12 +1,13 @@
 [package]
 name = "basic-http-rs"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 
 [dependencies]
 argh = "0.1.19"
 async-trait = "0.1.92"
 brotli = "9.0.0"
+async-compression = { version = "0.4", features = ["tokio", "brotli", "gzip"] }
 flate2 = "1.1.10"
 mime_guess = "2.0.5"
 tokio = { version = "1.53.1", features = ["full"] }
