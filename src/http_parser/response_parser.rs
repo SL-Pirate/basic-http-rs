@@ -24,6 +24,10 @@ impl<T> HttpResponse<T> {
     pub fn body(&self) -> &Option<T> {
         &self.body
     }
+
+    pub fn body_mut(&mut self) -> &mut Option<T> {
+        &mut self.body
+    }
 }
 
 impl HttpResponse<Vec<u8>> {

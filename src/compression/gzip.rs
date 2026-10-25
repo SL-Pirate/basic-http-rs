@@ -8,7 +8,7 @@ use std::io::Write;
 pub struct GzipCompressor;
 
 impl Compress for GzipCompressor {
-    fn compress(&self, content: &Vec<u8>) -> io::Result<Vec<u8>> {
+    fn compress(&self, content: &[u8]) -> io::Result<Vec<u8>> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&content)?;
         encoder.finish()

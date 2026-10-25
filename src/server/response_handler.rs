@@ -2,12 +2,13 @@ use crate::compression::Compression;
 use crate::http_parser::{
     CONNECTION_HEADER, CONTENT_ENCODING, CONTENT_LENGTH_HEADER, HttpResponse,
 };
+use std::io;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
 #[async_trait::async_trait]
-pub trait GenericHttpResponse<T: Clone>: Send {
+pub trait GenericHttpResponse<T>: Send {
     async fn send(
         &mut self,
         compress: bool,
@@ -51,31 +52,30 @@ impl GenericHttpResponse<Vec<u8>> for HttpResponse<Vec<u8>> {
         if let Some(b) = self.body()
             && compress
         {
-            let (algo_opt, compressed) = compressor.compress(b.clone(), acceptable_encodings);
-            if let Some(algo) = algo_opt {
+            if let Some(result) = compressor.compress(b, acceptable_encodings) {
                 let mut new_headers = self.headers().clone();
-                new_headers.insert(String::from(CONTENT_ENCODING), algo);
-                let new_res = HttpResponse::builder()
+                new_headers.insert(String::from(CONTENT_ENCODING), result.0);
+                let mut new_res = HttpResponse::builder()
                     .headers(new_headers)
-                    .body(compressed.clone())
+                    .body(result.1)
                     .status(self.status())
                     .status_code(self.status_code())
                     .build();
 
-                if let Err(e) = stream.write_all(&new_res.to_bytes()).await {
+                if let Err(e) = new_res.write_res(stream).await {
                     eprintln!("{e}")
                 }
                 return;
             }
         }
 
-        if let Err(e) = stream.write_all(&self.to_bytes()).await {
+        if let Err(e) = self.write_res(stream).await {
             eprintln!("{e}")
         }
     }
 
     fn get_content_length(&self) -> usize {
-        self.body().clone().map_or(0, |b| b.len())
+        self.body().as_ref().map_or(0, |b| b.len())
     }
 
     fn this(&self) -> &HttpResponse<Vec<u8>> {
@@ -84,13 +84,14 @@ impl GenericHttpResponse<Vec<u8>> for HttpResponse<Vec<u8>> {
 }
 
 impl HttpResponse<Vec<u8>> {
-    fn to_bytes(&self) -> Vec<u8> {
-        let res = self.encode_metadata();
-        let mut res_raw = res.into_bytes();
-        if let Some(body) = self.body().clone().as_mut() {
-            res_raw.append(body);
+    async fn write_res(&mut self, stream: &mut TcpStream) -> io::Result<()> {
+        stream
+            .write_all(self.encode_metadata().into_bytes().as_slice())
+            .await?;
+        if let Some(body) = self.body_mut() {
+            stream.write_all(body).await?;
         }
 
-        res_raw
+        Ok(())
     }
 }

@@ -195,21 +195,18 @@ impl RequestHandler {
         Ok(template)
     }
 
-    async fn send<T: Clone>(&mut self, req: &HttpRequest, res: &mut dyn GenericHttpResponse<T>) {
+    async fn send<T>(&mut self, req: &HttpRequest, res: &mut dyn GenericHttpResponse<T>) {
+        let should_compress = self.should_compress(req, &mut *res);
         res.send(
-            self.should_compress(req, res),
+            should_compress,
             req.get_acceptable_encodings(),
-            self.compressor.clone(),
+            Arc::clone(&self.compressor),
             &mut self.stream,
         )
         .await;
     }
 
-    fn should_compress<T: Clone>(
-        &self,
-        req: &HttpRequest,
-        res: &dyn GenericHttpResponse<T>,
-    ) -> bool {
+    fn should_compress<T>(&self, req: &HttpRequest, res: &mut dyn GenericHttpResponse<T>) -> bool {
         if !self.enable_compression {
             return false;
         }

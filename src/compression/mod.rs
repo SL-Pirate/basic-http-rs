@@ -18,5 +18,5 @@ pub struct Compression {
 }
 
 pub trait Compress: Debug + Send + Sync {
-    fn compress(&self, content: &Vec<u8>) -> io::Result<Vec<u8>>;
+    fn compress(&self, content: &[u8]) -> io::Result<Vec<u8>>;
 }

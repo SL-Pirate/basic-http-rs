@@ -7,7 +7,7 @@ use std::io::Write;
 pub struct BrotliCompressor;
 
 impl Compress for BrotliCompressor {
-    fn compress(&self, content: &Vec<u8>) -> std::io::Result<Vec<u8>> {
+    fn compress(&self, content: &[u8]) -> std::io::Result<Vec<u8>> {
         let mut compressed = Vec::new();
 
         // so that the borrower is freed

@@ -15,9 +15,9 @@ impl Compression {
     /// returns the used algorithm, the compressed bytes
     pub fn compress(
         &self,
-        content: Vec<u8>,
+        content: &[u8],
         supported_algorithms: Vec<&str>,
-    ) -> (Option<String>, Vec<u8>) {
+    ) -> Option<(String, Vec<u8>)> {
         for algo in AVAILABLE_ALGORITHMS {
             let algorithm = String::from(algo);
             if supported_algorithms.contains(&algorithm.as_str()) {
@@ -25,7 +25,7 @@ impl Compression {
 
                 match compressor.compress(&content) {
                     Ok(compressed) => {
-                        return (Some(algorithm), compressed);
+                        return Some((algorithm, compressed));
                     }
                     Err(e) => {
                         eprintln!("error compressing with {algo}: {e}");
@@ -34,7 +34,7 @@ impl Compression {
             }
         }
 
-        (None, content)
+        None
     }
 
     pub fn can_encode(encodings: Vec<&str>) -> bool {
