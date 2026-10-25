@@ -22,8 +22,8 @@ impl HttpServer {
         let compressor_acr = Arc::new(Compression::new());
 
         loop {
-            let server_arc = arc.clone();
-            let compressor_arc = compressor_acr.clone();
+            let server_arc = Arc::clone(&arc);
+            let compressor_arc = Arc::clone(&compressor_acr);
             let (stream, _) = server_arc.listener.accept().await?;
             tokio::spawn(async move {
                 let server = server_arc.as_ref();
